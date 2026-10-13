@@ -6,6 +6,8 @@
 //!
 //! CJK fonts stay system-provided: [`crate::theme`] appends available CJK faces to every family so
 //! Japanese, Chinese and Korean labels and workbook text can render without bundling font files.
+//! One exception in this fork: the Traditional Chinese interface draws with a bundled
+//! jf open 粉圓 face on every platform (see [`crate::theme`]), at the fork owner's request.
 
 use serde::{Deserialize, Serialize};
 
@@ -18,6 +20,7 @@ mod pt;
 mod ru;
 mod sr;
 mod zh;
+mod zh_hant;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -26,6 +29,8 @@ pub enum Language {
     En,
     Es,
     Zh,
+    #[serde(rename = "zh-tw")]
+    ZhHant,
     Ja,
     Ko,
     Ru,
@@ -38,7 +43,7 @@ pub enum Language {
 }
 
 impl Language {
-    pub const ALL: [Self; 11] = [Self::En, Self::Es, Self::Zh, Self::Ja, Self::Ko, Self::Ru, Self::PtBr, Self::De, Self::Cs, Self::Fr, Self::Sr];
+    pub const ALL: [Self; 12] = [Self::En, Self::Es, Self::Zh, Self::ZhHant, Self::Ja, Self::Ko, Self::Ru, Self::PtBr, Self::De, Self::Cs, Self::Fr, Self::Sr];
 
     /// The language's own name, shown in the switcher.
     pub fn name(self) -> &'static str {
@@ -46,6 +51,7 @@ impl Language {
             Self::En => "English",
             Self::Es => "Español",
             Self::Zh => "简体中文",
+            Self::ZhHant => "繁體中文（台灣）",
             Self::Ja => "日本語",
             Self::Ko => "한국어",
             Self::Ru => "Русский",
@@ -63,6 +69,7 @@ impl Language {
             Self::En => "en",
             Self::Es => "es",
             Self::Zh => "zh",
+            Self::ZhHant => "zh-tw",
             Self::Ja => "ja",
             Self::Ko => "ko",
             Self::Ru => "ru",
@@ -79,10 +86,16 @@ impl Language {
     }
 
     fn from_tag(tag: &str) -> Option<Self> {
-        match tag.trim().split(['-', '_']).next()?.to_ascii_lowercase().as_str() {
+        let mut parts = tag.trim().split(['-', '_']);
+        match parts.next()?.to_ascii_lowercase().as_str() {
             "en" => Some(Self::En),
             "es" => Some(Self::Es),
-            "zh" => Some(Self::Zh),
+            "zh" => Some(match parts.next().map(str::to_ascii_lowercase).as_deref() {
+                // The Traditional script, or a region that writes it: zh-Hant, zh-TW, zh-HK,
+                // zh-MO. Plain zh and zh-Hans stay Simplified, as before.
+                Some("hant" | "tw" | "hk" | "mo") => Self::ZhHant,
+                _ => Self::Zh,
+            }),
             "ja" => Some(Self::Ja),
             "ko" => Some(Self::Ko),
             "ru" => Some(Self::Ru),
@@ -122,6 +135,7 @@ impl Language {
             Self::Es => es::translate(text),
             Self::Ja => JAPANESE.iter().find(|(english, _)| *english == text).map(|(_, translated)| *translated),
             Self::Zh => zh::translate(text),
+            Self::ZhHant => zh_hant::translate(text),
             Self::Ko => ko::translate(text),
             Self::Ru => ru::translate(text),
             Self::PtBr => pt::translate(text),
@@ -611,9 +625,11 @@ mod tests {
             assert!(cs::translate(english).is_some_and(|text| !text.is_empty()), "missing Czech: {english}");
             assert!(fr::translate(english).is_some_and(|text| !text.is_empty()), "missing French: {english}");
             assert!(sr::translate(english).is_some_and(|text| !text.is_empty()), "missing Serbian: {english}");
+            assert!(zh_hant::translate(english).is_some_and(|text| !text.is_empty()), "missing Traditional Chinese: {english}");
         }
         assert_eq!(Language::Ja.tr("Data"), "データ");
         assert_eq!(Language::Zh.tr("Data"), "数据");
+        assert_eq!(Language::ZhHant.tr("Data"), "資料");
         assert_eq!(Language::Ko.tr("Data"), "데이터");
         assert_eq!(Language::Ru.tr("Data"), "Данные");
         assert_eq!(Language::PtBr.tr("Data"), "Dados");
@@ -628,6 +644,7 @@ mod tests {
         assert_eq!(Language::PtBr.tr("Sheet1!A1"), "Sheet1!A1");
         assert_eq!(Language::Ja.tr("Sheet1!A1"), "Sheet1!A1");
         assert_eq!(Language::Zh.tr("Sheet1!A1"), "Sheet1!A1");
+        assert_eq!(Language::ZhHant.tr("Sheet1!A1"), "Sheet1!A1");
         assert_eq!(Language::Ko.tr("Sheet1!A1"), "Sheet1!A1");
         assert_eq!(Language::Ru.tr("Sheet1!A1"), "Sheet1!A1");
         // Czech "Data" is spelled as in English, so probe it with a label that differs.
@@ -644,6 +661,8 @@ mod tests {
         assert_eq!(Language::Sr.tr("Sheet1!A1"), "Sheet1!A1");
         assert_eq!(Language::Sr.tr("Page Layout|Orientation"), "Orijentacija");
         assert_eq!(Language::Sr.tr("Orientation"), "Orijentacija");
+        assert_eq!(Language::ZhHant.tr("Page Layout|Orientation"), "紙張方向");
+        assert_eq!(Language::ZhHant.tr("Orientation"), "方向");
         assert_eq!(Language::parse("xx"), None);
     }
 
@@ -701,6 +720,21 @@ mod tests {
     }
 
     #[test]
+    fn traditional_chinese_uses_taiwan_wording() {
+        // Taiwan Excel wording, not Simplified text with swapped glyphs.
+        assert_eq!(Language::ZhHant.tr("Paste"), "貼上");
+        assert_eq!(Language::ZhHant.tr("File"), "檔案");
+        assert_eq!(Language::ZhHant.tr("Save"), "儲存");
+        assert_eq!(Language::ZhHant.tr("Freeze Panes"), "凍結窗格");
+        assert_eq!(Language::ZhHant.tr("PivotTable"), "樞紐分析表");
+        assert_ne!(Language::ZhHant.tr("Paste"), Language::Zh.tr("Paste"));
+        assert_ne!(Language::ZhHant.tr("Save"), Language::Zh.tr("Save"));
+        assert_eq!(Language::ZhHant.name(), "繁體中文（台灣）");
+        assert_eq!(Language::ZhHant.code(), "zh-tw");
+        assert_eq!(Language::parse(Language::ZhHant.code()), Some(Language::ZhHant));
+    }
+
+    #[test]
     fn unknown_saved_language_keeps_the_other_preferences() {
         let ui: crate::UiState = serde_json::from_str(r#"{"dark": true, "language": "xx"}"#).unwrap();
         assert!(ui.dark);
@@ -721,6 +755,13 @@ mod tests {
         assert_eq!(Language::from_tag("en_US"), Some(Language::En));
         assert_eq!(Language::from_tag("es_MX"), Some(Language::Es));
         assert_eq!(Language::from_tag("zh-Hans-CN"), Some(Language::Zh));
+        assert_eq!(Language::from_tag("zh-Hans"), Some(Language::Zh));
+        assert_eq!(Language::from_tag("zh-Hant-TW"), Some(Language::ZhHant));
+        assert_eq!(Language::from_tag("zh-Hant"), Some(Language::ZhHant));
+        assert_eq!(Language::from_tag("zh-TW"), Some(Language::ZhHant));
+        assert_eq!(Language::from_tag("zh-HK"), Some(Language::ZhHant));
+        assert_eq!(Language::from_tag("zh_MO"), Some(Language::ZhHant));
+        assert_eq!(Language::parse("zh-tw"), Some(Language::ZhHant));
         assert_eq!(Language::from_tag("ko-KR"), Some(Language::Ko));
         assert_eq!(Language::from_tag("RU_ru"), Some(Language::Ru));
         assert_eq!(Language::from_tag("de-DE"), Some(Language::De));

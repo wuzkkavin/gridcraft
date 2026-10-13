@@ -1,9 +1,10 @@
 //! Design tokens and fonts.
 //!
 //! Colours are our own, tuned to read like a modern desktop spreadsheet. Fonts come from the
-//! operating system at runtime (nothing bundled): the UI uses the platform UI font, cells use the
+//! operating system at runtime: the UI uses the platform UI font, cells use the
 //! best available match for the workbook font (Calibri/Carlito/Aptos/Arial…) with egui's built-in
-//! fonts as the last resort.
+//! fonts as the last resort. One exception in this fork: the Traditional Chinese interface face
+//! (jf open 粉圓, [`HUNINN`]) is bundled, so that interface renders the same on every platform.
 
 use std::sync::Arc;
 
@@ -355,6 +356,14 @@ fn candidates(role: &str) -> Vec<(String, u32)> {
     v
 }
 
+/// jf open 粉圓 (Huninn) 2.1: the Traditional Chinese face this fork bundles (upstream bundles
+/// no fonts; the file lives in the shared craft-fonts set, mirrored here at the fork owner's
+/// request — see ATTRIBUTION.md). One face for every platform, the web build included, so the
+/// Traditional Chinese interface never depends on a system CJK font being installed.
+const HUNINN: &[u8] = include_bytes!("../../../assets/fonts/jf-openhuninn-2.1.ttf");
+/// The font-data key [`HUNINN`] is bound under in the Traditional Chinese font set.
+const BUNDLED_HUNINN_KEY: &str = "bundled-huninn";
+
 /// Builds the font set from system fonts (with egui's defaults as fallback), with the default
 /// (non-Japanese) Han order. Never reads the host locale, so tests and snapshots are stable.
 pub fn font_definitions() -> FontDefinitions {
@@ -370,11 +379,17 @@ pub enum HanOrder {
     Japanese,
     /// Simplified Chinese first: the widest Han coverage, for every other interface language.
     Chinese,
+    /// Traditional Chinese first (the interface is Traditional Chinese).
+    Traditional,
 }
 
 impl HanOrder {
     pub fn of(language: crate::i18n::Language) -> Self {
-        if language == crate::i18n::Language::Ja { Self::Japanese } else { Self::Chinese }
+        match language {
+            crate::i18n::Language::Ja => Self::Japanese,
+            crate::i18n::Language::ZhHant => Self::Traditional,
+            _ => Self::Chinese,
+        }
     }
 }
 
@@ -393,7 +408,15 @@ pub fn font_definitions_with(language: crate::i18n::Language, used: &[String]) -
     let mut bound: Vec<String> = Vec::new();
     // The non-Latin fallback faces have to sit at the end of each chain: a Latin font owns Latin,
     // and epaint picks the first face that has the glyph, so they only catch their own scripts.
-    let fallback = load_fallback(&mut fonts, HanOrder::of(language));
+    let mut fallback = load_fallback(&mut fonts, HanOrder::of(language));
+    if language == crate::i18n::Language::ZhHant {
+        // The bundled 粉圓 face leads the fallback chain, ahead of every system face: it is
+        // the one face guaranteed present (the web has no system CJK face at all). The platform
+        // faces sit earlier in each chain and keep Latin; the bundled face catches the Han
+        // glyphs they lack, with the system TC face behind it for anything it lacks.
+        fonts.font_data.insert(BUNDLED_HUNINN_KEY.to_string(), Arc::new(FontData::from_static(HUNINN)));
+        fallback.insert(0, BUNDLED_HUNINN_KEY.to_string());
+    }
     for role in [UI, UI_BOLD, CELL, CELL_BOLD, CELL_ITALIC, CELL_BOLD_ITALIC, SERIF, MONO] {
         let paths = candidates(role);
         let refs: Vec<(&str, u32)> = paths.iter().map(|(p, i)| (p.as_str(), *i)).collect();
@@ -483,19 +506,21 @@ fn load_fallback(_fonts: &mut FontDefinitions, _han: HanOrder) -> Vec<String> {
 fn fallback_faces(han: HanOrder) -> Vec<(&'static str, Vec<(String, u32)>)> {
     let ja = ("sys-cjk-han-ja", cjk_han_japanese());
     let zh = ("sys-cjk-han-zh", cjk_han_simplified());
-    let (first, second) = match han {
-        HanOrder::Japanese => (ja, zh),
-        HanOrder::Chinese => (zh, ja),
+    // The Traditional order keeps all three Han faces: TC for glyph shapes, SC for coverage,
+    // Japanese last for the kana neither Chinese face carries.
+    let mut faces: Vec<(&'static str, Vec<(String, u32)>)> = match han {
+        HanOrder::Japanese => vec![ja, zh],
+        HanOrder::Chinese => vec![zh, ja],
+        HanOrder::Traditional => vec![("sys-cjk-han-tc", cjk_han_traditional()), zh, ja],
     };
-    vec![
-        first,
-        second,
+    faces.extend([
         ("sys-cjk-hangul", cjk_hangul()),
         ("sys-thai", thai()),
         ("sys-hebrew", hebrew()),
         ("sys-symbols", symbols()),
         ("sys-symbols-2", symbols_more()),
-    ]
+    ]);
+    faces
 }
 
 /// Linux directories that hold CJK fonts across distributions: Debian/Ubuntu (`opentype/noto`,
@@ -556,6 +581,23 @@ fn cjk_han_simplified() -> Vec<(String, u32)> {
         v.push((format!("{d}/wqy/wqy-microhei.ttc"), 0));
         v.push((format!("{d}/wenquanyi/wqy-microhei.ttc"), 0));
         v.push((format!("{d}/wqy-microhei.ttc"), 0));
+    }
+    v
+}
+
+/// Traditional Chinese Han faces: Microsoft JhengHei on Windows, PingFang on macOS and Noto Sans
+/// CJK TC on Linux (the region-merged file's TC face is index 3). Behind the bundled 粉圓 face
+/// in the chain; these only catch a glyph 粉圓 lacks.
+#[cfg(not(target_arch = "wasm32"))]
+fn cjk_han_traditional() -> Vec<(String, u32)> {
+    let mac = "/System/Library/Fonts";
+    let win = std::env::var("WINDIR").map(|w| format!("{w}\\Fonts")).unwrap_or_else(|_| "C:\\Windows\\Fonts".into());
+    let mut v: Vec<(String, u32)> = Vec::new();
+    v.push((format!("{win}\\msjh.ttc"), 0)); // Microsoft JhengHei
+    v.push((format!("{mac}/PingFang.ttc"), 0)); // TC faces live in this file
+    for d in LINUX_CJK_DIRS {
+        v.push((format!("{d}/NotoSansCJKtc-Regular.otf"), 0));
+        v.push((format!("{d}/NotoSansCJK-Regular.ttc"), 3)); // TC face
     }
     v
 }
@@ -836,10 +878,48 @@ mod tests {
             keys(HanOrder::Chinese),
             ["sys-cjk-han-zh", "sys-cjk-han-ja", "sys-cjk-hangul", "sys-thai", "sys-hebrew", "sys-symbols", "sys-symbols-2"]
         );
+        assert_eq!(
+            keys(HanOrder::Traditional),
+            ["sys-cjk-han-tc", "sys-cjk-han-zh", "sys-cjk-han-ja", "sys-cjk-hangul", "sys-thai", "sys-hebrew", "sys-symbols", "sys-symbols-2"]
+        );
         assert_eq!(HanOrder::of(Language::Ja), HanOrder::Japanese);
+        assert_eq!(HanOrder::of(Language::ZhHant), HanOrder::Traditional);
         for l in [Language::En, Language::Zh, Language::Ko, Language::Ru, Language::PtBr, Language::De, Language::Cs] {
             assert_eq!(HanOrder::of(l), HanOrder::Chinese, "{l:?} shares the default order (no font rebuild)");
         }
+    }
+
+    #[test]
+    fn traditional_chinese_leads_with_the_bundled_font() {
+        // The bundled 粉圓 face is always bound for the Traditional Chinese interface (no
+        // system font needed), and it heads the fallback tail of every family chain, ahead of
+        // whichever system fallback faces this machine has.
+        let fonts = font_definitions_for_language(Language::ZhHant);
+        assert!(fonts.font_data.contains_key(BUNDLED_HUNINN_KEY), "the bundled face is bound");
+        let system_tail: Vec<String> =
+            fallback_faces(HanOrder::Traditional).into_iter().map(|(k, _)| k.to_string()).filter(|k| fonts.font_data.contains_key(k)).collect();
+        let mut tail = vec![BUNDLED_HUNINN_KEY.to_string()];
+        tail.extend(system_tail);
+        for role in [UI, UI_BOLD, CELL, CELL_BOLD, CELL_ITALIC, CELL_BOLD_ITALIC, SERIF, MONO] {
+            let chain = fonts.families.get(&FontFamily::Name(role.into())).map(Vec::as_slice).unwrap_or_default();
+            assert!(chain.len() >= tail.len(), "{role} chain too short for its fallback");
+            assert_eq!(&chain[chain.len() - tail.len()..], tail.as_slice(), "{role} must end with 粉圓 then the system faces");
+        }
+        // No other language binds it.
+        assert!(!font_definitions_for_language(Language::Zh).font_data.contains_key(BUNDLED_HUNINN_KEY));
+        // And it really draws Traditional glyphs (not tofu), even with no system CJK face.
+        let ctx = egui::Context::default();
+        ctx.set_fonts(fonts);
+        let mut out = ctx.run_ui(egui::RawInput::default(), |_ui| {});
+        out.textures_delta.clear();
+        let font = FontId::new(14.0, FontFamily::Proportional);
+        let glyphs = |text: &str| {
+            let galley = ctx.fonts_mut(|f| f.layout_no_wrap(text.to_owned(), font.clone(), Color32::BLACK));
+            galley.rows.iter().flat_map(|r| r.glyphs.iter().filter(|g| g.chr != ' ').map(|g| g.uv_rect)).collect::<Vec<_>>()
+        };
+        let tofu = glyphs("\u{25FB}");
+        let drawn = glyphs("繁體中文 儲存格 活頁簿 樞紐分析");
+        assert!(!drawn.is_empty() && drawn.iter().all(|g| !tofu.contains(g)), "Traditional text renders as tofu");
     }
 
     #[test]
