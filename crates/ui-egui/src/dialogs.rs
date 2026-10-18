@@ -1069,7 +1069,7 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                     ui.add_space(4.0);
                     ui.label(format!("{} engine commands are available. See docs/mcp.md and docs/control-protocol.md.", gridcraft_engine::command_specs().len()));
                 }
-                "about" => about(ui, &mut d),
+                "about" => about(ui, &mut d, app.ui.language),
                 "journal" => {
                     egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
                         for (id, p) in app.session.journal.iter().rev().take(500) {
@@ -1470,7 +1470,7 @@ fn form_fields(ui: &mut egui::Ui, d: &mut Dialog) {
 
 /// Help ▸ About GridCraft: the app, its contributors and the AI models that helped. The credits
 /// are compiled in (`crate::credits`, docs/contributors.md).
-fn about(ui: &mut egui::Ui, d: &mut Dialog) {
+fn about(ui: &mut egui::Ui, d: &mut Dialog, language: crate::i18n::Language) {
     ui.horizontal(|ui| {
         for tab in ["About", "Contributors", "Models"] {
             if ui.selectable_label(d.tab == tab, tab).clicked() {
@@ -1489,6 +1489,13 @@ fn about(ui: &mut egui::Ui, d: &mut Dialog) {
             ui.label("A clean-room, open-source, Rust-native spreadsheet. Part of ArtCraft.");
             ui.hyperlink_to("getartcraft.com/apps/gridcraft", "https://getartcraft.com/apps/gridcraft");
             ui.hyperlink_to("Join the ArtCraft Discord", "https://discord.gg/artcraft");
+            // Fork-only Traditional Chinese edition credit (owner's standing rule,
+            // 2026-10-16): shown in the About tab only when the interface language
+            // is Traditional Chinese (Taiwan).
+            if language == crate::i18n::Language::ZhHant {
+                ui.add_space(8.0);
+                ui.label("©Copyright 2026 By 吳治綱 繁體中文化");
+            }
         }
     }
 }
