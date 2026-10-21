@@ -404,6 +404,18 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Workbook calculation" => "活頁簿計算",
         "Enable iterative calculation" => "啟用反覆運算",
         "Calculation settings are saved with the workbook." => "計算設定會隨活頁簿一起儲存。",
+        // grid.rs cell and row/column header context menus (new in v0.9.0).
+        "Cut" => "剪下",
+        "Copy" => "複製",
+        "Insert…" => "插入…",
+        "Delete…" => "刪除…",
+        "Filter by Selected Cell's Value" => "依選取儲存格的值篩選",
+        "New Comment" => "新增註解",
+        "Pick From Drop-down List…" => "從下拉式清單挑選…",
+        "Define Name…" => "定義名稱…",
+        "Link…" => "連結…",
+        "Hide" => "隱藏",
+        "Unhide" => "取消隱藏",
         _ => return None,
     })
 }
