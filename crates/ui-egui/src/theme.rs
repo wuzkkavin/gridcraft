@@ -991,7 +991,17 @@ mod tests {
         );
         assert_eq!(
             keys(HanOrder::Traditional),
-            ["sys-cjk-han-tc", "sys-cjk-han-zh", "sys-cjk-han-ja", "sys-cjk-hangul", "sys-thai", "sys-hebrew", "sys-symbols", "sys-symbols-2"]
+            [
+                "sys-cjk-han-tc",
+                "sys-cjk-han-zh",
+                "sys-cjk-han-ja",
+                "sys-cjk-hangul",
+                "sys-thai",
+                "sys-lao",
+                "sys-hebrew",
+                "sys-symbols",
+                "sys-symbols-2"
+            ]
         );
         assert_eq!(HanOrder::of(Language::Ja), HanOrder::Japanese);
         assert_eq!(HanOrder::of(Language::ZhHant), HanOrder::Traditional);

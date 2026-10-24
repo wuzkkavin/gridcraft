@@ -160,6 +160,7 @@ impl Language {
         match parts.next()?.to_ascii_lowercase().as_str() {
             "en" => Some(Self::En),
             "es" => Some(Self::Es),
+            "el" => Some(Self::El),
             "zh" => Some(match parts.next().map(str::to_ascii_lowercase).as_deref() {
                 // The Traditional script, or a region that writes it: zh-Hant, zh-TW, zh-HK,
                 // zh-MO. Plain zh and zh-Hans stay Simplified, as before.
