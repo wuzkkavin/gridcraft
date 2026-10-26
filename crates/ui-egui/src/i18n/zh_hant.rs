@@ -147,6 +147,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Remove Arrows" => "移除箭號",
         "Show Formulas" => "顯示公式",
         "Error Checking" => "錯誤檢查",
+        "Circular References" => "循環參照",
         "Evaluate Formula" => "評估公式",
         "Watch Window" => "監看視窗",
         "Calculation\nOptions" => "計算\n選項",
@@ -323,6 +324,8 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Go to Header" => "移至頁首",
         "Different First Page" => "首頁不同",
         "Different Odd & Even Pages" => "奇偶頁不同",
+        "Scale with Document" => "隨文件縮放",
+        "Align with Page Margins" => "與頁邊對齊",
         "Go to Footer" => "移至頁尾",
         "Ruler" => "尺規",
         // File › Backstage view.
